@@ -45,7 +45,6 @@ struct ListNode {
     ListNode *next;
     ListNode *down;
     ListNode(Node<K,V> *x) : val(x), pre(NULL), next(NULL), down(NULL) {}
-    // ListNode(Node<K,V> *x, ListNode *next, ListNode *down) : val(x), pre(NULL) ,next(next), tail(next), down(down) {}
     ListNode(K k, V v, ListNode *pre = NULL, ListNode *next = NULL, ListNode *down=NULL) {
         this->val = new Node<K,V>(k,v);
         this->pre = pre;
@@ -75,7 +74,6 @@ private:
     ListNode<K, V>* find_far_right_node_in_current_level(ListNode<K, V> *cur, K key);
     void delete_current_level_nodes(ListNode<K,V>* head);
     void delete_empty_level();
-    void split_key_value(std::string str, std::string* key, std::string* value);
     int _size; // 链表长度(不包含头结点)
     int _max_level; // 跳表高度
 };
@@ -178,9 +176,7 @@ void SkipList<K,V>::load_data() {
 		std::cout << "文件打开失败" << std::endl;
 		return;
     }
-    std::string line;
-    std::string key;
-    std::string value;
+    std::string line, key, value;
 	while (std::getline(_file_read, line))
 	{
         if(line.empty() || (line.find(delimiter) == std::string::npos)) {
@@ -192,15 +188,6 @@ void SkipList<K,V>::load_data() {
 		this->put(std::stoi(key), value);
 	}
     _file_read.close();
-}
-
-template<typename K, typename V>
-void get_key_value_from_string(std::string str, std::string* key, std::string* value) {
-    if(str.empty() || (str.find(delimiter) == std::string::npos)) {
-        return;
-    }
-    *key = str.substr(0, str.find(delimiter));
-    *value = str.substr(str.find(delimiter)+1, str.length());
 }
 
 template<typename K, typename V>
@@ -217,31 +204,33 @@ std::string SkipList<K, V>::get(K key) {
 */
 template<typename K, typename V>
 int SkipList<K,V>::put(K key, V value) {
+    // 找到最底层的待插入的位置
     ListNode<K, V> *cur = find_far_right_node_in_list(key);
+    // 如果待插入位置的下一个结点的值等于key, 表示key已经存在, 返回-1, 插入失败
     if(cur->next != NULL && cur->next->val->get_key() == key) {
         return -1; // key is exist
     }
+    // 掷骰子, 随机初始化层数
     const double PROBABILITY = 0.5;
-    double num = rand()/double(RAND_MAX); //rand()%100/(double)101; 
-    int level = 0; // arr[0] begin
+    double num = rand()/double(RAND_MAX); 
+    int level = 0; // init level
     while(num < PROBABILITY) {
         level++;
         num = rand()/double(RAND_MAX);
     }
-    // std::cout << "random level: " << level + 1<< std::endl;
     // 如果当前层数比历史层数要高, 新建层
     while(this->_max_level - 1 < level) {
         this->_head.push_back(new ListNode<K, V>(this->_head[0]->val->get_key(), this->_head[0]->val->get_value(), NULL, NULL, this->_head[this->_max_level-1]));
         this->_max_level++;
     }
-    // std::cout << "current max level: "<< this->_max_level << std::endl;
     // 插入
     ListNode<K,V> *last_down = NULL;
     for(int i = 0; i <= level; i++) { 
+        // 当前层不是最底层的时候, 需要找到插入的位置 
         if(i > 0) {
             cur = find_far_right_node_in_current_level(this->_head[i], key);
         }
-        // 插入首个结点
+        // 插入首个结点(只有当前层是新建的时候才会走这个分支)
         if(cur->next == NULL) {
             cur->next = new ListNode<K,V>(key, value);
             cur->next->pre = cur;
@@ -252,8 +241,8 @@ int SkipList<K,V>::put(K key, V value) {
             cur = cur->next;
             continue;
         }
+        // 插入中间结点及尾结点
         if(cur->next != NULL) { 
-            // 插入中间结点
             ListNode<K,V> *tmp_next = cur->next;
             cur->next = new ListNode<K,V>(key, value);
             cur->next->pre = cur;
